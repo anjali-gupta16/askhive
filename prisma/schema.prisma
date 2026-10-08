@@ -1,0 +1,222 @@
+// AskHive — Prisma Schema
+// PostgreSQL + Auth.js (NextAuth v5)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────
+
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum VoteTarget {
+  QUESTION
+  ANSWER
+}
+
+// ─── Auth.js Models ─────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  username      String    @unique
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String? // bcrypt hash (null for OAuth users)
+  role          Role      @default(USER)
+  reputation    Int       @default(0)
+  isGuest       Boolean   @default(false)
+  bio           String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts  Account[]
+  sessions  Session[]
+  questions Question[]
+  answers   Answer[]
+  votes     Vote[]
+  badges    UserBadge[]
+
+  @@index([username])
+  @@index([email])
+  @@index([reputation])
+  @@index([createdAt])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Core Domain Models ─────────────────────────────────
+
+model Question {
+  id        String   @id @default(cuid())
+  title     String
+  body      String   @db.Text
+  slug      String   @unique
+  views     Int      @default(0)
+  score     Int      @default(0)
+  authorId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  author  User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  answers Answer[]
+  votes   Vote[]
+  tags    QuestionTag[]
+
+  @@index([authorId])
+  @@index([createdAt])
+  @@index([score])
+  @@index([slug])
+}
+
+model Answer {
+  id            String   @id @default(cuid())
+  body          String   @db.Text
+  score         Int      @default(0)
+  isAccepted    Boolean  @default(false)
+  isAiGenerated Boolean  @default(false)
+  authorId      String
+  questionId    String
+  parentId      String? // null = top-level answer, non-null = reply (2 levels max)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  author   User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  parent   Answer?  @relation("AnswerReplies", fields: [parentId], references: [id], onDelete: SetNull)
+  replies  Answer[] @relation("AnswerReplies")
+  votes    Vote[]
+
+  @@index([authorId])
+  @@index([questionId])
+  @@index([parentId])
+  @@index([createdAt])
+  @@index([score])
+  @@index([isAccepted])
+}
+
+model Vote {
+  id         String     @id @default(cuid())
+  value      Int // +1 or -1
+  target     VoteTarget
+  userId     String
+  questionId String?
+  answerId   String?
+  createdAt  DateTime   @default(now())
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question Question? @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answer   Answer?   @relation(fields: [answerId], references: [id], onDelete: Cascade)
+
+  // Unique constraint: one vote per user per target
+  @@unique([userId, questionId, target], name: "unique_user_question_vote")
+  @@unique([userId, answerId, target], name: "unique_user_answer_vote")
+  @@index([questionId])
+  @@index([answerId])
+  @@index([userId])
+}
+
+// ─── Tags (Many-to-Many) ────────────────────────────────
+
+model Tag {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  color       String?  @default("#c0c1ff")
+  createdAt   DateTime @default(now())
+
+  questions QuestionTag[]
+
+  @@index([name])
+}
+
+model QuestionTag {
+  questionId String
+  tagId      String
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, tagId])
+  @@index([tagId])
+  @@index([questionId])
+}
+
+// ─── Gamification ───────────────────────────────────────
+
+model Badge {
+  id          String @id @default(cuid())
+  name        String @unique
+  description String
+  icon        String @default("emoji_events")
+  tier        String @default("bronze") // bronze | silver | gold
+  criteria    String // machine-readable rule key, e.g. "accepted_answers"
+  threshold   Int    @default(1)
+
+  users UserBadge[]
+}
+
+model UserBadge {
+  id        String   @id @default(cuid())
+  userId    String
+  badgeId   String
+  awardedAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+  @@index([badgeId])
+}
