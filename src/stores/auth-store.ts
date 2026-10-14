@@ -138,7 +138,7 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: "askhive-auth-session",
+      name: "askhive-auth-v3",
     }
   )
 );
