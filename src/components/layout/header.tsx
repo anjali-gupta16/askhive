@@ -381,6 +381,7 @@ export function Header({ searchQuery, onSearchChange, onOpenAskModal }: HeaderPr
                     onClick={() => {
                       logout();
                       setIsUserMenuOpen(false);
+                      router.push("/login");
                     }}
                     className="flex items-center gap-2 w-full px-2.5 py-2 rounded-lg text-xs text-error hover:bg-error/15 transition-colors cursor-pointer"
                   >

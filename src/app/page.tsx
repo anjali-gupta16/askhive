@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { RightSidebar } from "@/components/layout/right-sidebar";
@@ -317,7 +318,19 @@ export default function Home() {
   const [selectedQuestion, setSelectedQuestion] = useState<QuestionItem | null>(null);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
 
-  const { user: currentUser } = useAuthStore();
+  const router = useRouter();
+  const { user: currentUser, isAuthenticated } = useAuthStore();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (isMounted && !isAuthenticated) {
+      router.replace("/login?mode=register");
+    }
+  }, [isMounted, isAuthenticated, router]);
 
   const handleToggleBookmark = (id: string) => {
     setBookmarkedIds((prev) => {
@@ -560,6 +573,28 @@ You can eliminate memory copy overhead by exporting the WebAssembly linear memor
       setIsAiGenerating(false);
     }, 1000);
   };
+
+  if (!isMounted || !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center relative overflow-hidden font-sans">
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-primary/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="flex flex-col items-center gap-4 z-10 text-center">
+          <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-primary to-primary-container flex items-center justify-center text-3xl shadow-2xl animate-bounce">
+            🐝
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-on-surface tracking-tight">
+              Ask<span className="text-primary">Hive</span>
+            </h2>
+            <p className="text-xs text-outline font-mono mt-1 flex items-center justify-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
+              Opening authentication portal...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background text-on-surface flex flex-col font-sans">

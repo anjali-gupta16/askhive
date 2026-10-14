@@ -74,8 +74,8 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      user: PRESET_USERS.anjali,
-      isAuthenticated: true,
+      user: null,
+      isAuthenticated: false,
 
       login: (email: string) => {
         // Find existing preset or create active session
@@ -138,7 +138,7 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: "askhive-auth-storage",
+      name: "askhive-auth-session",
     }
   )
 );
